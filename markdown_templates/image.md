@@ -1,4 +1,4 @@
 <p align="center">
-<img src="{src}">
+<img src="{src}"><br>
 Рис. {$n}. {title}
 </p>
