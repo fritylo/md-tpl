@@ -1,4 +1,4 @@
-<center>
-   <img src="{src}" /><br/>
-   <span>Рис. {$n}. {title}</span>
-</center>
+<p align="center">
+<img src="{src}">
+Рис. {$n}. {title}
+</p>
