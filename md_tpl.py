@@ -45,7 +45,7 @@ def match_all_inline(template_name: str, source: str, wrappers: str):
 
 def get_tpl_args_as_dict(args_group: str) -> str:
    args = ', ' + args_group.strip()
-   json_regex = re.compile(r'(,[\s\n]*)(\w*?)\s*:', re.DOTALL)
+   json_regex = re.compile(r'(,[\s\n]*)(\S*?)\s*:', re.DOTALL)
    args_json = json_regex.sub(r'\1"\2":', args)[2:]
    args_dict = json.loads('{' + args_json + '}')
    return args_dict

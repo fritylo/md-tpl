@@ -1,5 +1,5 @@
 <details><summary>{button}</summary>
 <p>
-:: {template} >> {$args} ::
+:: {;} >> {$args} ::
 </p>
 </details>
