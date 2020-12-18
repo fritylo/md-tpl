@@ -1,6 +1,24 @@
 from json.decoder import JSONDecodeError
 import os, sys, re, json
 
+def precompile_regex(regex: str, wrappers: list = ['', '']):
+   global _V, V_, _P, P_, SS
+   
+   _S, S_ = wrappers
+   
+   regex = regex.replace('<x', _S)
+   regex = regex.replace('x>', S_)
+   regex = regex.replace('~', SS)
+   regex = regex.replace(' ', '\s*?')
+   
+   # autoescape
+   #match = re.findall(r'<(.*?)>', regex)
+   #if match:
+   #   regex = regex.replace(f'<{match[0]}>', re.escape(match[0]))
+   
+   return regex
+
+
 def read_templates(templates_folder):
    res = {}
    
@@ -20,10 +38,15 @@ def read_templates(templates_folder):
 
 
 def match_all_inline(template_name: str, source: str, wrappers: str):
+   global SS
    _S, S_ = wrappers
    
-   command_regex_str = '('+_S+r'\s*?'+ template_name +r'\s*?.*?'+S_+')'
-   command_regex = re.compile(command_regex_str, re.DOTALL)
+   template_name_start = template_name
+   template_name = re.escape(template_name)
+   
+   command_regex_str = f'(<x {template_name}(?=(~|\s|x>)) .*?x>)'
+   precompiled = precompile_regex(command_regex_str, [_S, S_])
+   command_regex = re.compile(precompiled, re.DOTALL)
 
    match_all = command_regex.findall(source)
    
@@ -32,14 +55,21 @@ def match_all_inline(template_name: str, source: str, wrappers: str):
    
    matches = []
    for match in match_all:
+      match = match[0]
       full_match = match
+      # == to ==:
+      match = re.sub(precompile_regex(f'{template_name} ==(?!:)'), f'{template_name_start} ==:', match)
       match = match.replace('\n', '').replace('\r', '')
       match = re.sub(r',\s*', ', ', match)
       # get data
-      #                           0                               1    2
-      command_regex = re.compile('('+_S+r'\s*'+template_name+r'\s*(>>)?(?P<args>.*)'+S_+')')
-      groups = command_regex.findall(match)
-      matches += [{ 'full_match': full_match, 'args': groups[0][2] }]
+      command_regex_str = f'(<x {template_name}(?=(~|\s|x>)) (x>|~(?P<args>.*?)x>))'
+      precompiled = precompile_regex(command_regex_str, [_S, S_])
+      #print('precompiled:', precompiled)
+      command_regex = re.compile(precompiled)
+      #print('match:', match)
+      match_all_local = command_regex.findall(match)
+      groups = match_all_local[0]
+      matches += [{ 'full_match': full_match, 'args': groups[3] }]
       
    return matches
 
@@ -61,12 +91,12 @@ def paste_all_pieces(depth: int, source: str, var_wrappers: list, piece_wrappers
    
    # for each template
    for template_name, template_content in templates.items():
-      print(str(depth) + ':' + template_name.upper())
+      #print(str(depth) + ':' + template_name.upper())
       
       match_all = match_all_inline(template_name, final_markdown, [_P, P_])
       
       if not match_all:
-         print('  no matches')
+         #print('  no matches')
          continue
       
       was_replace = True
@@ -79,16 +109,36 @@ def paste_all_pieces(depth: int, source: str, var_wrappers: list, piece_wrappers
          
          try:
             args_dict = get_tpl_args_as_dict(match['args'])
-            print(' ', args_dict)
+            #print(' ', args_dict)
          except JSONDecodeError:
-            print(f'Error: Not correct syntax when use template "{template_name}". Error rise in this place: \n  {full_match}')
+            print(f'Error: Not correct syntax when use template "{template_name}". Error rise in this place, on depth={depth}: \n  {full_match}')
          
          # replacing vars in template
          for arg_name, arg_val in args_dict.items():
             replacement = replacement.replace(_V+ arg_name +V_, str(arg_val))
-         replacement = replacement.replace(_V+ '$n' +V_, str(i+1))
+            
+         # $n
+         regex = precompile_regex('<x \$n x>', [_V, V_])
+         replacement = re.sub(regex, str(i+1), replacement)
+         
+         # $args
          args_str = ', '.join(map(lambda it: f'{it[0]}:"{it[1]}"', args_dict.items()))
-         replacement = replacement.replace(_V+ '$args' +V_, args_str)
+         regex = precompile_regex('<x \$args x>', [_V, V_])
+         replacement = re.sub(regex, args_str, replacement)
+         
+         # $file
+         regex = precompile_regex('<x \$file\((.*?)\) x>', [_V, V_])
+         regex_match = re.findall(regex, replacement)
+         if regex_match:
+            file_path = os.path.join(target_template_dir, re.sub(r'^\.\/', '', regex_match[0]))
+            try:
+               with open(file_path, 'r') as file:
+                  replacement = re.sub(regex, file.read(), replacement)
+            except IsADirectoryError:
+               print(f'Error: You trying insert directory instead of file in "{template_name}". Error rise in this place, on depth={depth}: \n  {full_match}')
+            except FileNotFoundError:
+               print(f'Error: file not found "{template_name}". Target path was: {file_path}. Error rise in this place, on depth={depth}: \n  {full_match}')
+            
             
          final_markdown = final_markdown.replace(full_match, replacement)
          
@@ -107,7 +157,8 @@ pwd = os.path.abspath(os.path.dirname(__file__))
 
 _V = '{' # var paste
 V_ = '}' # var paste
-_P, P_ = '::', '::' # piece execute
+_P, P_ = '\(\(', '\)\)' # piece execute
+SS = '\=' # send sequence
 
 if 'var_wrappers' in argv_dict:
    _V, V_ = argv_dict['var_wrappers'].split(',')
@@ -119,7 +170,8 @@ if 'piece_wrappers' in argv_dict:
 output_path = argv[1]
 
 # taking start text
-target_template = argv[0]
+target_template = os.path.abspath(argv[0])
+target_template_dir = os.path.dirname(target_template)
 final_markdown = None
 with open(target_template, 'r') as tpl_file:
    final_markdown = tpl_file.read()

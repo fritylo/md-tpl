@@ -1,5 +1,6 @@
 <details><summary>{button}</summary>
 <p>
-:: {;} >> {$args} ::
+(( {;} = {$args} ))
 </p>
 </details>
+<br>
