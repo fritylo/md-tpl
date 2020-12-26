@@ -1,7 +1,8 @@
 from json.decoder import JSONDecodeError
 import os, sys, re, json
 
-sys.path.append('style-str')
+style_str_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'style-str')
+sys.path.append(style_str_path)
 from style_str import sstr
 
 def precompile_regex(regex: str, wrappers: list = ['', '']):
