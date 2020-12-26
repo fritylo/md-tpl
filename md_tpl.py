@@ -1,6 +1,9 @@
 from json.decoder import JSONDecodeError
 import os, sys, re, json
 
+sys.path.append('style-str')
+from style_str import sstr
+
 def precompile_regex(regex: str, wrappers: list = ['', '']):
    global _V, V_, _P, P_, SS
    
@@ -151,7 +154,13 @@ argv = sys.argv[1:]
 argv_dict = {}
 for arg in argv:
    if arg.startswith('--'):
-      argv_dict[arg] = arg.split('=').pop()
+      arg = arg[2:]
+      arg_split = arg.split('=')
+      if len(arg_split) == 1:
+         argv_dict[arg_split[0]] = None
+      else:
+         argv_dict[arg_split[0]] = '='.join(arg_split[1:])
+         
 pwd = os.path.abspath(os.path.dirname(__file__))
 
 
@@ -165,6 +174,15 @@ if 'var_wrappers' in argv_dict:
    
 if 'piece_wrappers' in argv_dict:
    _P, P_ = argv_dict['piece_wrappers'].split(',')
+   
+   
+if 'help' in argv_dict:
+   print(sstr('''Colors:
+   <yellow|command>
+   common args
+   <purple|optional args>
+> <yellow|python3 md_tpl.py> source.tpl.md output.md <purple|--var_wrappers={,} --piece_wrappers=((,))>'''))
+   exit()
 
 
 output_path = argv[1]
